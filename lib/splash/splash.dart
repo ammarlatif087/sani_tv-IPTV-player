@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:connectivity/connectivity.dart';
 
 import '../custom_orientation_player/custom_orientation_player.dart';
 
@@ -11,18 +12,42 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  bool isConnected = false;
+
   @override
   void initState() {
     super.initState();
+    checkConnectivity();
+  }
 
-    // Navigate to the next screen after a delay
-    Timer(const Duration(seconds: 2), () {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-            builder: (context) => const CustomOrientationPlayer()),
-        (route) => false,
-      );
+  Future<void> checkConnectivity() async {
+    var connectivityResult = await (Connectivity().checkConnectivity());
+    if (connectivityResult == ConnectivityResult.mobile ||
+        connectivityResult == ConnectivityResult.wifi) {
+      setState(() {
+        isConnected = true;
+      });
+    } else {
+      setState(() {
+        isConnected = false;
+      });
+    }
+
+    Connectivity().onConnectivityChanged.listen((result) {
+      if (result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi) {
+        setState(() {
+          isConnected = true;
+        });
+        Future.delayed(const Duration(seconds: 3), () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const CustomOrientationPlayer()),
+            (route) => false,
+          );
+        });
+      }
     });
   }
 
@@ -40,7 +65,9 @@ class _SplashScreenState extends State<SplashScreen> {
               height: 150,
             ),
             const SizedBox(height: 16),
-            const CircularProgressIndicator(), // Add any desired loading indicator
+            isConnected
+                ? const CircularProgressIndicator() // Add any desired loading indicator
+                : const Text('No internet connection'),
           ],
         ),
       ),

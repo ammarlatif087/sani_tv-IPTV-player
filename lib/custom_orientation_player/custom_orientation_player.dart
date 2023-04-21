@@ -1,3 +1,4 @@
+import 'package:connectivity/connectivity.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -23,11 +24,23 @@ class _CustomOrientationPlayerState extends State<CustomOrientationPlayer> {
           videoPlayerController: VideoPlayerController.network('')),
       urls: []);
   List<Channel> channels = []; // List to store parsed channels
-
   @override
   void initState() {
     super.initState();
     fetchAndParseM3U();
+
+    Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      if (result == ConnectivityResult.none) {
+        setState(() {
+          isConnected = false;
+        });
+      } else {
+        setState(() {
+          isConnected = true;
+          fetchAndParseM3U();
+        });
+      }
+    });
   }
 
   @override
@@ -38,7 +51,34 @@ class _CustomOrientationPlayerState extends State<CustomOrientationPlayer> {
 
   // skipToVideo(String url) {
   //   flickManager.handleChangeVideo(VideoPlayerController.network(url));
-  // }
+
+  bool isLoading = true;
+  bool isConnected = true;
+
+  void fetchAndParseM3U() async {
+    try {
+      String m3uUrl =
+          "http://192.178.1.195:8000/playlist.m3u8"; //  M3U file URL
+      List<Channel> parsedChannels = await M3UParser.parseM3U(m3uUrl);
+      // Update state with the parsed channels
+      setState(() {
+        channels = parsedChannels;
+        print(channels);
+        flickManager = FlickManager(
+          videoPlayerController: VideoPlayerController.network(
+            // 'https://github.com/GeekyAnts/flick-video-player-demo-videos/blob/master/example/the_valley_compressed.mp4?raw=true'
+            channels[0].link,
+          ),
+        );
+
+        dataManager = DataManager(flickManager: flickManager, urls: channels);
+        isLoading = false; // set isLoading to false once the list is loaded
+      });
+    } catch (e) {
+      // handle the error here, for example show a dialog to inform the user
+      print(e.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,22 +94,20 @@ class _CustomOrientationPlayerState extends State<CustomOrientationPlayer> {
         ),
         drawer: Drawer(
           width: 200,
-          child: Expanded(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: channels.length,
-              itemBuilder: (BuildContext context, int index) {
-                return InkWell(
-                  onTap: () {
-                    playVideo(channels[index].link);
-                    print(channels[index].link);
-                  },
-                  child: ListTile(
-                    title: Text(channels[index].name),
-                  ),
-                );
-              },
-            ),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: channels.length,
+            itemBuilder: (BuildContext context, int index) {
+              return InkWell(
+                onTap: () {
+                  playVideo(channels[index].link);
+                  print(channels[index].link);
+                },
+                child: ListTile(
+                  title: Text(channels[index].name),
+                ),
+              );
+            },
           ),
         ),
         body: VisibilityDetector(
@@ -81,53 +119,32 @@ class _CustomOrientationPlayerState extends State<CustomOrientationPlayer> {
               flickManager.flickControlManager?.autoResume();
             }
           },
-          child: OrientationBuilder(
-            builder: (BuildContext context, Orientation orientation) =>
-                SizedBox(
-              child: FlickVideoPlayer(
-                flickManager: flickManager,
-                // preferredDeviceOrientationFullscreen: const [
-                //   DeviceOrientation.landscapeLeft,
-                //   DeviceOrientation.landscapeRight,
-                // ],
-
-                flickVideoWithControls: FlickVideoWithControls(
-                  controls: CustomOrientationControls(dataManager: dataManager),
+          child: isConnected
+              ? isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : FlickVideoPlayer(
+                      flickManager: flickManager,
+                      flickVideoWithControls: FlickVideoWithControls(
+                        controls:
+                            CustomOrientationControls(dataManager: dataManager),
+                      ),
+                      flickVideoWithControlsFullscreen: FlickVideoWithControls(
+                        videoFit: BoxFit.fill,
+                        controls:
+                            CustomOrientationControls(dataManager: dataManager),
+                      ),
+                    )
+              : const Center(
+                  child: Text(
+                    'No internet connection',
+                    style: TextStyle(fontSize: 20, color: Colors.white),
+                  ),
                 ),
-                flickVideoWithControlsFullscreen: FlickVideoWithControls(
-                  videoFit: BoxFit.fitWidth,
-                  controls: CustomOrientationControls(dataManager: dataManager),
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );
-  }
-
-  void fetchAndParseM3U() async {
-    String m3uUrl =
-        "https://fastfiber.buraqsol.com.pk:443/playlist/sani/sani/m3u"; //  M3U file URL
-    List<Channel> parsedChannels = await M3UParser.parseM3U(m3uUrl);
-    // Update state with the parsed channels
-    setState(() {
-      channels = parsedChannels;
-      print(channels);
-      flickManager = FlickManager(
-        videoPlayerController: VideoPlayerController.network(
-          // 'https://github.com/GeekyAnts/flick-video-player-demo-videos/blob/master/example/the_valley_compressed.mp4?raw=true'
-          channels[0].link,
-        ),
-
-        // onVideoEnd: () {
-
-        //   dataManager.skipToNextVideo(Duration(seconds: 5));
-        // }
-      );
-
-      dataManager = DataManager(flickManager: flickManager, urls: channels);
-    });
   }
 
   void playVideo(String url) {
